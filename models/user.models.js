@@ -24,7 +24,11 @@ const userSchema = new Schema(
       required: true,
     },
     phoneNumber: {
+      // Sign-in accepts either email or phone number, so this has to be
+      // unique too, or $or could match more than one account.
       type: String,
+      unique: true,
+      trim: true,
       required: true,
       minLength: 8,
       maxLength: 8,
@@ -108,8 +112,10 @@ const userSchema = new Schema(
   }
 );
 
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+/* An async hook signals completion by resolving, so it must not also take a
+   `next` callback — mixing the two is how hooks end up running twice. */
+userSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
   this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
 });
 
