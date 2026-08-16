@@ -1,17 +1,17 @@
 const express = require('express')
 const router = express.Router()
 const postCtrl = require('../controllers/posts.controllers')
+const { requireAuth, requireRole } = require('../middleware/auth')
 
-router.post('/create', postCtrl.create)
+// Every post route requires a valid token; ownership is checked in the
+// controller, since it depends on the record being acted on.
+router.get('/', requireAuth, postCtrl.getPosts)
+router.get('/my-posts/:id', requireAuth, postCtrl.getUserPosts)
 
-router.get('/', postCtrl.getPosts)
+router.post('/create', requireAuth, requireRole('parent'), postCtrl.create)
+router.delete('/delete/:id', requireAuth, requireRole('parent'), postCtrl.deletePost)
+router.put('/update/:id', requireAuth, requireRole('parent'), postCtrl.updateStatus)
 
-router.delete('/delete/:id', postCtrl.deletePost)
-
-router.put('/tutor-apply/:id', postCtrl.applyToPost)
-
-router.put('/update/:id',postCtrl.updateStatus)
-
-router.get('/my-posts/:id', postCtrl.getUserPosts)
+router.put('/tutor-apply/:id', requireAuth, requireRole('tutor'), postCtrl.applyToPost)
 
 module.exports = router
