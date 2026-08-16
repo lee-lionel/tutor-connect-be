@@ -32,11 +32,18 @@ function pickUpdatableFields(body) {
   }, {});
 }
 
+/* Values from a JSON body can be objects, and Mongoose passes an object such
+   as {"$ne": null} straight through as a query operator. Anything used in a
+   query has to be confirmed a string first. */
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 async function create(req, res) {
   try {
     const { name, email, password, phoneNumber, role } = req.body;
 
-    if (!name || !email || !password || !phoneNumber || !role) {
+    if (![name, email, password, phoneNumber, role].every(isNonEmptyString)) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -67,13 +74,21 @@ async function create(req, res) {
 
 async function signIn(req, res) {
   try {
+    const { input, password } = req.body;
+
+    // Without this, {"input": {"$ne": null}} is a valid query operator and
+    // matches an arbitrary account.
+    if (!isNonEmptyString(input) || typeof password !== "string") {
+      return res.status(400).json({ message: "Enter your login details" });
+    }
+
     const user = await User.findOne({
-      $or: [{ email: req.body.input }, { phoneNumber: req.body.input }],
+      $or: [{ email: input.trim().toLowerCase() }, { phoneNumber: input.trim() }],
     });
 
     // Same message either way, so this can't be used to discover which
     // emails and phone numbers are registered.
-    const match = user && (await bcrypt.compare(req.body.password || "", user.password));
+    const match = user && (await bcrypt.compare(password, user.password));
     if (!match) {
       return res.status(401).json({ message: "Incorrect login details" });
     }
