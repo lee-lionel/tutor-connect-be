@@ -1,7 +1,7 @@
 const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
-require('./config/database')
+const { isConnected } = require('./config/database')
 const userRoute = require('./routes/user.routes')
 const postRoute = require('./routes/post.routes')
 
@@ -14,8 +14,23 @@ app.use(cors(allowedOrigin ? { origin: allowedOrigin.split(',').map(o => o.trim(
 
 app.use(express.json())
 
+/* Reports the database too. A health check that answers "ok" while the
+   database is unreachable is worse than no health check: the service looks
+   fine to anything watching it while every real request fails. */
 app.get('/health', function (req, res) {
-    res.status(200).json({ status: 'ok' })
+    const database = isConnected() ? 'up' : 'down'
+    res.status(database === 'up' ? 200 : 503).json({ status: database === 'up' ? 'ok' : 'degraded', database })
+})
+
+/* Say what is actually wrong. Without this a request against a down
+   database surfaces as a generic 500 from a controller's catch — sign-in
+   answered "Could not sign you in", which reads as wrong credentials when
+   the real problem is that the database cannot be reached. */
+app.use('/api', function (req, res, next) {
+    if (isConnected()) return next()
+    res.status(503).json({
+        message: 'The database is unavailable right now. Please try again shortly.',
+    })
 })
 
 app.use('/api/users', userRoute)
